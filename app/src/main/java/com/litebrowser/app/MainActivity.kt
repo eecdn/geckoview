@@ -2,7 +2,6 @@ package com.litebrowser.app
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -22,7 +21,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.ContentBlocking
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
@@ -32,21 +30,14 @@ import org.mozilla.geckoview.GeckoSession.NavigationDelegate
 import org.mozilla.geckoview.GeckoSession.PermissionDelegate
 import org.mozilla.geckoview.GeckoSession.ContentDelegate
 import org.mozilla.geckoview.GeckoSession.ProgressDelegate
-import org.mozilla.geckoview.GeckoSession.HistoryDelegate
 import org.mozilla.geckoview.GeckoView
-import org.mozilla.geckoview.WebRequestError
 
-/**
- * 精简浏览器主界面
- * 基于 GeckoView 内核，支持多标签、书签、历史记录
- */
 class MainActivity : AppCompatActivity() {
 
     companion object {
         private var runtime: GeckoRuntime? = null
     }
 
-    // UI 组件
     private lateinit var geckoView: GeckoView
     private lateinit var urlInput: EditText
     private lateinit var progressBar: ProgressBar
@@ -59,11 +50,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tabBarScroll: android.widget.HorizontalScrollView
     private lateinit var tabDivider: View
 
-    // 核心组件
     private lateinit var tabManager: TabManager
     private lateinit var database: BrowserDatabase
 
-    // 状态
     private var isUrlBarFocused = false
     private var currentUrl = ""
     private var isBookmarked = false
@@ -72,29 +61,19 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 初始化 UI
         initViews()
         initDatabase()
-
-        // 初始化 GeckoRuntime（全局唯一）
         initRuntime()
 
-        // 初始化标签管理器
         tabManager = TabManager(this)
-
-        // 处理外部打开的 URL
         val startUrl = getStartUrl(intent)
 
-        // 创建第一个标签页
         val tab = tabManager.createTab(runtime!!, startUrl)
         setupSession(tab)
         geckoView.setSession(tab.session)
         tabManager.switchToTab(tab.id)
 
-        // 设置事件监听
         setupListeners()
-
-        // 更新UI
         updateNavigationButtons()
     }
 
@@ -131,7 +110,7 @@ class MainActivity : AppCompatActivity() {
             val settings = GeckoRuntimeSettings.Builder()
                 .contentBlocking(
                     ContentBlocking.Settings.Builder()
-                        .categories(ContentBlocking.CAT_ALL)
+                        .enhancedTrackingProtection(ContentBlocking.EtpLevel.STRICT)
                         .build()
                 )
                 .build()
@@ -150,9 +129,6 @@ class MainActivity : AppCompatActivity() {
         return getString(R.string.default_homepage)
     }
 
-    /**
-     * 为标签页设置所有必要的 Delegate
-     */
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupSession(tab: TabData) {
         tab.session.contentDelegate = object : ContentDelegate {
@@ -167,10 +143,6 @@ class MainActivity : AppCompatActivity() {
                         updateTabBar()
                     }
                 }
-            }
-
-            override fun onContextMenu(session: GeckoSession, element: GeckoSession.ContentDelegate.ContextElement, context: Int, elementType: Int, uri: String?) {
-                // 不处理上下文菜单
             }
         }
 
@@ -214,16 +186,12 @@ class MainActivity : AppCompatActivity() {
         tab.session.navigationDelegate = object : NavigationDelegate {
             override fun onLoadRequest(
                 session: GeckoSession,
-                request: GeckoSession.NavigationDelegate.LoadRequest
-            ): GeckoResult<AllowOrDeny> {
-                return GeckoResult.ALLOW
+                request: NavigationDelegate.LoadRequest
+            ): GeckoResult<String>? {
+                return GeckoResult.fromValue(null)
             }
 
-            override fun onLocationChange(
-                session: GeckoSession,
-                url: String?,
-                perms: List<GeckoSession.PermissionDelegate.ContentPermission>
-            ) {
+            override fun onLocationChange(session: GeckoSession, url: String?) {
                 url?.let {
                     currentUrl = it
                     tabManager.updateTabUrl(tab.id, it)
@@ -240,18 +208,13 @@ class MainActivity : AppCompatActivity() {
             override fun onLoadError(
                 session: GeckoSession,
                 uri: String?,
-                error: WebRequestError
-            ): GeckoResult<String> {
+                error: Int,
+                category: Int
+            ): GeckoResult<String>? {
                 runOnUiThread {
-                    Toast.makeText(this@MainActivity, "加载失败: ${error.category}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "加载失败: $uri", Toast.LENGTH_SHORT).show()
                 }
-                return GeckoResult(null)
-            }
-        }
-
-        tab.session.historyDelegate = object : HistoryDelegate {
-            override fun onHistoryStateChange(session: GeckoSession, historyList: GeckoSession.HistoryDelegate.HistoryList) {
-                // 可选：处理历史状态变化
+                return GeckoResult.fromValue(null)
             }
         }
 
@@ -259,22 +222,20 @@ class MainActivity : AppCompatActivity() {
             override fun onContentPermissionRequest(
                 session: GeckoSession,
                 perm: PermissionDelegate.ContentPermission
-            ): GeckoResult<Int> {
-                // 自动允许所有权限请求（精简版策略）
-                return GeckoResult.valueOf(PermissionDelegate.PERMISSION_ALLOW)
+            ): GeckoResult<Int>? {
+                return GeckoResult.fromValue(PermissionDelegate.PERMISSION_ALLOW)
             }
 
             override fun onMediaPermissionRequest(
                 session: GeckoSession,
                 perm: PermissionDelegate.MediaPermission
-            ): GeckoResult<Int> {
-                return GeckoResult.valueOf(PermissionDelegate.PERMISSION_ALLOW)
+            ): GeckoResult<Int>? {
+                return GeckoResult.fromValue(PermissionDelegate.PERMISSION_ALLOW)
             }
         }
     }
 
     private fun setupListeners() {
-        // 地址栏回车加载
         urlInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO ||
                 actionId == EditorInfo.IME_ACTION_DONE ||
@@ -293,64 +254,44 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 返回按钮
         btnBack.setOnClickListener {
             tabManager.getActiveTab()?.session?.goBack()
         }
 
-        // 前进按钮
         btnForward.setOnClickListener {
             tabManager.getActiveTab()?.session?.goForward()
         }
 
-        // 书签按钮
         btnBookmark.setOnClickListener {
             toggleBookmark()
         }
 
-        // 菜单按钮
         btnMenu.setOnClickListener {
             showPopupMenu(it)
         }
     }
 
-    /**
-     * 从地址栏输入加载URL
-     */
     private fun loadUrlFromInput() {
         val input = urlInput.text.toString().trim()
         if (input.isEmpty()) return
-
         val url = processInput(input)
         loadUrl(url)
         urlInput.clearFocus()
     }
 
-    /**
-     * 处理用户输入 - 判断是URL还是搜索关键词
-     */
     private fun processInput(input: String): String {
         val trimmed = input.trim()
-
-        // 已经是完整URL
         if (trimmed.startsWith("http://") || trimmed.startsWith("https://") ||
             trimmed.startsWith("about:")) {
             return trimmed
         }
-
-        // 看起来像域名
         if (trimmed.contains(".") && !trimmed.contains(" ")) {
             return "https://$trimmed"
         }
-
-        // 否则当作搜索
         return getString(R.string.search_engine_url,
             java.net.URLEncoder.encode(trimmed, "UTF-8"))
     }
 
-    /**
-     * 加载URL
-     */
     private fun loadUrl(url: String) {
         val tab = tabManager.getActiveTab() ?: return
         tab.session.loadUri(url)
@@ -358,30 +299,24 @@ class MainActivity : AppCompatActivity() {
         urlInput.setText(url)
     }
 
-    /**
-     * 更新导航按钮状态
-     */
     private fun updateNavigationButtons() {
         val tab = tabManager.getActiveTab() ?: return
         tab.session.canGoBack().then { canGoBack ->
             runOnUiThread {
-                btnBack.alpha = if (canGoBack) 1.0f else 0.3f
-                btnBack.isEnabled = canGoBack
+                btnBack.alpha = if (canGoBack != null && canGoBack) 1.0f else 0.3f
+                btnBack.isEnabled = (canGoBack != null && canGoBack)
             }
             GeckoResult<Void>()
         }
         tab.session.canGoForward().then { canGoForward ->
             runOnUiThread {
-                btnForward.alpha = if (canGoForward) 1.0f else 0.3f
-                btnForward.isEnabled = canGoForward
+                btnForward.alpha = if (canGoForward != null && canGoForward) 1.0f else 0.3f
+                btnForward.isEnabled = (canGoForward != null && canGoForward)
             }
             GeckoResult<Void>()
         }
     }
 
-    /**
-     * 更新安全图标
-     */
     private fun updateSecurityIcon(url: String, isSecure: Boolean = false) {
         if (url.startsWith("https://")) {
             securityIcon.visibility = View.VISIBLE
@@ -394,9 +329,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 检查书签状态
-     */
     private fun checkBookmarkStatus(url: String) {
         if (!URLUtil.isNetworkUrl(url)) return
         lifecycleScope.launch(Dispatchers.IO) {
@@ -410,9 +342,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 切换书签状态
-     */
     private fun toggleBookmark() {
         val url = currentUrl
         if (!URLUtil.isNetworkUrl(url)) return
@@ -435,9 +364,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 显示弹出菜单
-     */
     private fun showPopupMenu(anchor: View) {
         val popupView = LayoutInflater.from(this).inflate(R.layout.popup_menu, null)
         val popupWindow = PopupWindow(
@@ -470,9 +396,6 @@ class MainActivity : AppCompatActivity() {
         popupWindow.showAsDropDown(anchor)
     }
 
-    /**
-     * 打开新标签页
-     */
     private fun openNewTab(url: String = "") {
         val tab = tabManager.createTab(runtime!!, url)
         setupSession(tab)
@@ -488,9 +411,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 更新标签栏UI
-     */
     private fun updateTabBar() {
         val tabs = tabManager.getAllTabs()
         val activeTab = tabManager.getActiveTab()
@@ -538,9 +458,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 切换标签页
-     */
     private fun switchTab(tabId: Int) {
         val tab = tabManager.switchToTab(tabId) ?: return
         geckoView.releaseSession()
@@ -552,14 +469,10 @@ class MainActivity : AppCompatActivity() {
         checkBookmarkStatus(tab.url)
     }
 
-    /**
-     * 关闭标签页
-     */
     private fun closeTab(tabId: Int) {
         val newActiveTab = tabManager.closeTab(tabId) ?: return
 
         if (tabManager.getTabCount() == 0) {
-            // 没有标签了，创建一个新的
             val tab = tabManager.createTab(runtime!!)
             setupSession(tab)
             geckoView.setSession(tab.session)
@@ -577,6 +490,7 @@ class MainActivity : AppCompatActivity() {
         updateNavigationButtons()
     }
 
+    @Suppress("DEPRECATION")
     override fun onBackPressed() {
         val tab = tabManager.getActiveTab()
         if (tab != null && tab.session.canGoBack()) {
@@ -590,7 +504,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // 清理所有标签页
         tabManager.getAllTabs().forEach { it.session.close() }
     }
 }
