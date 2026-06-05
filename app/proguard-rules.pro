@@ -1,0 +1,3 @@
+# GeckoView
+-keep class org.mozilla.geckoview.** { *; }
+-dontwarn org.mozilla.geckoview.**

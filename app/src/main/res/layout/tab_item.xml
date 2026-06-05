@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tab_item"
+    android:layout_width="@dimen/tab_item_max_width"
+    android:layout_height="match_parent"
+    android:background="@color/tab_inactive"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/normal_padding"
+    android:paddingEnd="@dimen/small_padding">
+
+    <TextView
+        android:id="@+id/tab_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:textColor="@color/tab_text_inactive"
+        android:textSize="12sp" />
+
+    <ImageButton
+        android:id="@+id/tab_close"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="关闭"
+        android:src="@drawable/ic_close_tab" />
+
+</LinearLayout>

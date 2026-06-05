@@ -1,8 +1,0 @@
-<resources>
-    <string name="app_name">极简浏览器</string>
-    <string name="hint_url">输入网址...</string>
-    <string name="go">前往</string>
-    <string name="back">后退</string>
-    <string name="forward">前进</string>
-    <string name="refresh">刷新</string>
-</resources>
