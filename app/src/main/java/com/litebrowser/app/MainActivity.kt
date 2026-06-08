@@ -2,7 +2,6 @@ package com.litebrowser.app
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -21,15 +20,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.mozilla.geckoview.ContentBlocking
-import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
 import org.mozilla.geckoview.GeckoSession
-import org.mozilla.geckoview.GeckoSession.NavigationDelegate
-import org.mozilla.geckoview.GeckoSession.PermissionDelegate
-import org.mozilla.geckoview.GeckoSession.ContentDelegate
-import org.mozilla.geckoview.GeckoSession.ProgressDelegate
 import org.mozilla.geckoview.GeckoView
 
 class MainActivity : AppCompatActivity() {
@@ -107,14 +100,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun initRuntime() {
         if (runtime == null) {
-            val settings = GeckoRuntimeSettings.Builder()
-                .contentBlocking(
-                    ContentBlocking.Settings.Builder()
-                        .enhancedTrackingProtection(ContentBlocking.EtpLevel.STRICT)
-                        .build()
-                )
-                .build()
-
+            val settings = GeckoRuntimeSettings.Builder().build()
             runtime = GeckoRuntime.create(this, settings)
         }
     }
@@ -131,22 +117,7 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupSession(tab: TabData) {
-        tab.session.contentDelegate = object : ContentDelegate {
-            override fun onTitleChange(session: GeckoSession, title: String?) {
-                val t = title ?: ""
-                tabManager.updateTabTitle(tab.id, t)
-                if (tabManager.getActiveTab()?.id == tab.id) {
-                    runOnUiThread {
-                        if (!isUrlBarFocused) {
-                            urlInput.setText(t)
-                        }
-                        updateTabBar()
-                    }
-                }
-            }
-        }
-
-        tab.session.progressDelegate = object : ProgressDelegate {
+        tab.session.progressDelegate = object : GeckoSession.ProgressDelegate {
             override fun onPageStart(session: GeckoSession, url: String?) {
                 runOnUiThread {
                     progressBar.visibility = View.VISIBLE
@@ -183,14 +154,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        tab.session.navigationDelegate = object : NavigationDelegate {
-            override fun onLoadRequest(
-                session: GeckoSession,
-                request: NavigationDelegate.LoadRequest
-            ): GeckoResult<String>? {
-                return GeckoResult.fromValue(null)
-            }
-
+        tab.session.navigationDelegate = object : GeckoSession.NavigationDelegate {
             override fun onLocationChange(session: GeckoSession, url: String?) {
                 url?.let {
                     currentUrl = it
@@ -203,34 +167,6 @@ class MainActivity : AppCompatActivity() {
                         checkBookmarkStatus(it)
                     }
                 }
-            }
-
-            override fun onLoadError(
-                session: GeckoSession,
-                uri: String?,
-                error: Int,
-                category: Int
-            ): GeckoResult<String>? {
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "加载失败: $uri", Toast.LENGTH_SHORT).show()
-                }
-                return GeckoResult.fromValue(null)
-            }
-        }
-
-        tab.session.permissionDelegate = object : PermissionDelegate {
-            override fun onContentPermissionRequest(
-                session: GeckoSession,
-                perm: PermissionDelegate.ContentPermission
-            ): GeckoResult<Int>? {
-                return GeckoResult.fromValue(PermissionDelegate.PERMISSION_ALLOW)
-            }
-
-            override fun onMediaPermissionRequest(
-                session: GeckoSession,
-                perm: PermissionDelegate.MediaPermission
-            ): GeckoResult<Int>? {
-                return GeckoResult.fromValue(PermissionDelegate.PERMISSION_ALLOW)
             }
         }
     }
@@ -306,14 +242,14 @@ class MainActivity : AppCompatActivity() {
                 btnBack.alpha = if (canGoBack != null && canGoBack) 1.0f else 0.3f
                 btnBack.isEnabled = (canGoBack != null && canGoBack)
             }
-            GeckoResult<Void>()
+            null
         }
         tab.session.canGoForward().then { canGoForward ->
             runOnUiThread {
                 btnForward.alpha = if (canGoForward != null && canGoForward) 1.0f else 0.3f
                 btnForward.isEnabled = (canGoForward != null && canGoForward)
             }
-            GeckoResult<Void>()
+            null
         }
     }
 
